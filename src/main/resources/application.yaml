@@ -1,0 +1,29 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: edge-service
+
+  config:
+    import: optional:configserver:http://config-service:8888
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: content-route
+              uri: http://content-manager:8080
+              predicates:
+                - Path=/topics/**
+            - id: progress-route
+              uri: http://progress-manager:8080
+              predicates:
+                - Path=/progress/**
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty.http.client: DEBUG
+                
