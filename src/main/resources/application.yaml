@@ -1,29 +1,63 @@
 server:
   port: 8080
+  forward-headers-strategy: framework
 
 spring:
   application:
     name: edge-service
 
-  config:
-    import: optional:configserver:http://config-service:8888
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            provider: keycloak
+            client-id: edge-service
+            client-secret: ${KEYCLOAK_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope:
+              - openid
+              - profile
+              - email
+        provider:
+          keycloak:
+            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://host.docker.internal:8091/realms/picture-dictionary}
 
   cloud:
     gateway:
       server:
         webflux:
           routes:
-            - id: content-route
-              uri: http://content-manager:8080
+            - id: content-route-root
+              uri: ${CONTENT_SERVICE_URL:http://content-manager:8080}
+              predicates:
+                - Path=/topics
+              filters:
+                - SaveSession
+
+            - id: content-route-nested
+              uri: ${CONTENT_SERVICE_URL:http://content-manager:8080}
               predicates:
                 - Path=/topics/**
-            - id: progress-route
-              uri: http://progress-manager:8080
+              filters:
+                - SaveSession
+
+            - id: progress-route-root
+              uri: ${PROGRESS_SERVICE_URL:http://progress-manager:8080}
+              predicates:
+                - Path=/progress
+              filters:
+                - SaveSession
+
+            - id: progress-route-nested
+              uri: ${PROGRESS_SERVICE_URL:http://progress-manager:8080}
               predicates:
                 - Path=/progress/**
-
-logging:
-  level:
-    org.springframework.cloud.gateway: DEBUG
-    reactor.netty.http.client: DEBUG
-                
+              filters:
+                - SaveSession
