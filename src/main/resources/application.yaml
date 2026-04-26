@@ -27,7 +27,7 @@ spring:
               - email
         provider:
           keycloak:
-            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://host.docker.internal:8091/realms/picture-dictionary}
+            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak:8080/realms/picture-dictionary}
 
   cloud:
     gateway:

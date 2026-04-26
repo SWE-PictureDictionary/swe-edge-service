@@ -7,6 +7,7 @@ import java.util.Set;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
@@ -24,7 +25,9 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.HttpStatusServerEntryPoint;
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
+import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 
+@Profile("!test")
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
@@ -42,12 +45,12 @@ public class SecurityConfig {
                                 new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers("/", "/homepage.html", "/login.html", "/index.html").permitAll()
-                        .pathMatchers("/oauth2/**", "/login/**", "/logout").permitAll()
+                        .pathMatchers("/oauth2/**", "/login/**").permitAll()
                         .pathMatchers("/api/me").authenticated()
 
                         .pathMatchers(HttpMethod.GET, "/topics/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/topics/**").hasRole("CONTENT_MANAGER")
-                        .pathMatchers(HttpMethod.PUT, "/topics/**").hasRole("CONTENT_MANAGER")
+                        .pathMatchers(HttpMethod.POST, "/topics/**").hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR")
+                        .pathMatchers(HttpMethod.PUT, "/topics/**").hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR")
                         .pathMatchers(HttpMethod.DELETE, "/topics/**").hasRole("CONTENT_MANAGER")
 
                         .pathMatchers(HttpMethod.POST, "/progress/**").hasRole("LEARNER")
@@ -57,6 +60,7 @@ public class SecurityConfig {
                 )
                 .oauth2Login(Customizer.withDefaults())
                 .logout(logout -> logout
+                        .requiresLogout(ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/logout"))
                         .logoutSuccessHandler(logoutSuccessHandler))
                 .build();
     }
