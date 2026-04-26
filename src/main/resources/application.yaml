@@ -6,6 +6,9 @@ spring:
   application:
     name: edge-service
     
+  config:
+    import: optional:configserver:http://config-service
+
   cloud:
     gateway:
       server:
