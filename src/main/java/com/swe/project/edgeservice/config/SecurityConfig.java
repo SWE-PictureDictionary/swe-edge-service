@@ -25,7 +25,13 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.HttpStatusServerEntryPoint;
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
+import org.springframework.security.web.server.csrf.CsrfWebFilter;
+import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher.MatchResult;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
+import org.springframework.web.server.ServerWebExchange;
+
+import reactor.core.publisher.Mono;
 
 @Profile("!test")
 @Configuration
@@ -39,7 +45,9 @@ public class SecurityConfig {
     ) {
         return http
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse()))
+                        .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new ServerCsrfTokenRequestAttributeHandler())
+                        .requireCsrfProtectionMatcher(SecurityConfig::requiresCsrfProtection))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(
                                 new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
@@ -48,10 +56,15 @@ public class SecurityConfig {
                         .pathMatchers("/oauth2/**", "/login/**").permitAll()
                         .pathMatchers("/api/me").authenticated()
 
-                        .pathMatchers(HttpMethod.GET, "/topics/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/topics/**").hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR")
-                        .pathMatchers(HttpMethod.PUT, "/topics/**").hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR")
-                        .pathMatchers(HttpMethod.DELETE, "/topics/**").hasRole("CONTENT_MANAGER")
+                        .pathMatchers(HttpMethod.GET, "/topics", "/topics/**").authenticated()
+                        .pathMatchers(HttpMethod.POST, "/topics").hasRole("CONTENT_MANAGER")
+                        .pathMatchers(HttpMethod.POST, "/topics/*/hotspots", "/topics/*/images", "/topics/*/audio")
+                                .hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR")
+                        .pathMatchers(HttpMethod.PUT, "/topics/*/hotspots/*")
+                                .hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR")
+                        .pathMatchers(HttpMethod.DELETE, "/topics/*/hotspots/*")
+                                .hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR")
+                        .pathMatchers(HttpMethod.DELETE, "/topics/*").hasRole("CONTENT_MANAGER")
 
                         .pathMatchers(HttpMethod.POST, "/progress/**").hasRole("LEARNER")
                         .pathMatchers(HttpMethod.GET, "/progress/**").authenticated()
@@ -60,9 +73,18 @@ public class SecurityConfig {
                 )
                 .oauth2Login(Customizer.withDefaults())
                 .logout(logout -> logout
-                        .requiresLogout(ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/logout"))
+                        .requiresLogout(ServerWebExchangeMatchers.pathMatchers("/logout"))
                         .logoutSuccessHandler(logoutSuccessHandler))
                 .build();
+    }
+
+    private static Mono<MatchResult> requiresCsrfProtection(ServerWebExchange exchange) {
+        String path = exchange.getRequest().getPath().pathWithinApplication().value();
+        if ("/logout".equals(path)) {
+            return MatchResult.notMatch();
+        }
+
+        return CsrfWebFilter.DEFAULT_CSRF_MATCHER.matches(exchange);
     }
 
     @Bean
