@@ -17,8 +17,6 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcReactiveOAuth2UserService;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
-import org.springframework.security.oauth2.client.oidc.web.server.logout.OidcClientInitiatedServerLogoutSuccessHandler;
-import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
 import org.springframework.security.oauth2.client.userinfo.ReactiveOAuth2UserService;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
@@ -28,7 +26,6 @@ import org.springframework.security.web.server.csrf.CookieServerCsrfTokenReposit
 import org.springframework.security.web.server.csrf.CsrfWebFilter;
 import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher.MatchResult;
-import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import org.springframework.web.server.ServerWebExchange;
 
 import reactor.core.publisher.Mono;
@@ -40,8 +37,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityWebFilterChain springSecurityFilterChain(
-            ServerHttpSecurity http,
-            OidcClientInitiatedServerLogoutSuccessHandler logoutSuccessHandler
+            ServerHttpSecurity http
     ) {
         return http
                 .csrf(csrf -> csrf
@@ -53,6 +49,7 @@ public class SecurityConfig {
                                 new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers("/", "/homepage.html", "/login.html", "/index.html").permitAll()
+                        .pathMatchers("/logout").permitAll()
                         .pathMatchers("/oauth2/**", "/login/**").permitAll()
                         .pathMatchers("/api/me").authenticated()
 
@@ -72,9 +69,7 @@ public class SecurityConfig {
                         .anyExchange().authenticated()
                 )
                 .oauth2Login(Customizer.withDefaults())
-                .logout(logout -> logout
-                        .requiresLogout(ServerWebExchangeMatchers.pathMatchers("/logout"))
-                        .logoutSuccessHandler(logoutSuccessHandler))
+                .logout(logout -> logout.disable())
                 .build();
     }
 
@@ -85,16 +80,6 @@ public class SecurityConfig {
         }
 
         return CsrfWebFilter.DEFAULT_CSRF_MATCHER.matches(exchange);
-    }
-
-    @Bean
-    OidcClientInitiatedServerLogoutSuccessHandler oidcLogoutSuccessHandler(
-            ReactiveClientRegistrationRepository clientRegistrationRepository
-    ) {
-        OidcClientInitiatedServerLogoutSuccessHandler handler =
-                new OidcClientInitiatedServerLogoutSuccessHandler(clientRegistrationRepository);
-        handler.setPostLogoutRedirectUri("{baseUrl}/login.html");
-        return handler;
     }
 
     @Bean
