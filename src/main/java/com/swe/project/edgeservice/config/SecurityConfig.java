@@ -63,7 +63,10 @@ public class SecurityConfig {
                                 .hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR")
                         .pathMatchers(HttpMethod.DELETE, "/topics/*").hasRole("CONTENT_MANAGER")
 
-                        .pathMatchers(HttpMethod.POST, "/progress/**").hasRole("LEARNER")
+                        .pathMatchers(HttpMethod.POST, "/progress/**")
+                                .hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR", "LEARNER")
+                        .pathMatchers(HttpMethod.DELETE, "/progress/**")
+                                .hasAnyRole("CONTENT_MANAGER", "HOTSPOT_EDITOR", "LEARNER")
                         .pathMatchers(HttpMethod.GET, "/progress/**").authenticated()
 
                         .anyExchange().authenticated()
