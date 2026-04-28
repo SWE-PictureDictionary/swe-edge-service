@@ -1,9 +1,15 @@
 package com.swe.project.edgeservice.config;
 
+import java.io.IOException;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,6 +40,8 @@ import reactor.core.publisher.Mono;
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Bean
     SecurityWebFilterChain springSecurityFilterChain(
@@ -92,17 +100,8 @@ public class SecurityConfig {
         return userRequest -> delegate.loadUser(userRequest).map(oidcUser -> {
             Set<GrantedAuthority> mappedAuthorities = new HashSet<>(oidcUser.getAuthorities());
 
-            Object realmAccessObj = oidcUser.getClaims().get("realm_access");
-            if (realmAccessObj instanceof Map<?, ?> realmAccess) {
-                Object rolesObj = realmAccess.get("roles");
-                if (rolesObj instanceof Collection<?> roles) {
-                    roles.stream()
-                            .map(Object::toString)
-                            .map(role -> "ROLE_" + role.toUpperCase().replace('-', '_'))
-                            .map(SimpleGrantedAuthority::new)
-                            .forEach(mappedAuthorities::add);
-                }
-            }
+            addRolesFromClaims(oidcUser.getClaims(), mappedAuthorities);
+            addRolesFromAccessToken(userRequest.getAccessToken().getTokenValue(), mappedAuthorities);
 
             return new DefaultOidcUser(
                     mappedAuthorities,
@@ -111,5 +110,71 @@ public class SecurityConfig {
                     "preferred_username"
             );
         });
+    }
+
+    private static void addRolesFromAccessToken(
+            String accessToken,
+            Set<GrantedAuthority> mappedAuthorities
+    ) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return;
+        }
+
+        String[] tokenParts = accessToken.split("\\.");
+        if (tokenParts.length < 2) {
+            return;
+        }
+
+        try {
+            byte[] payload = Base64.getUrlDecoder().decode(tokenParts[1]);
+            Map<String, Object> claims = OBJECT_MAPPER.readValue(
+                    payload,
+                    new TypeReference<>() {}
+            );
+            addRolesFromClaims(claims, mappedAuthorities);
+        } catch (IllegalArgumentException | IOException ignored) {
+            // Keep the authenticated user if a non-JWT access token is ever used.
+        }
+    }
+
+    private static void addRolesFromClaims(
+            Map<String, Object> claims,
+            Set<GrantedAuthority> mappedAuthorities
+    ) {
+        Object realmAccessObj = claims.get("realm_access");
+        if (realmAccessObj instanceof Map<?, ?> realmAccess) {
+            addRoles(realmAccess.get("roles"), mappedAuthorities);
+        }
+
+        Object resourceAccessObj = claims.get("resource_access");
+        if (resourceAccessObj instanceof Map<?, ?> resourceAccess) {
+            resourceAccess.values().forEach(resourceObj -> {
+                if (resourceObj instanceof Map<?, ?> resource) {
+                    addRoles(resource.get("roles"), mappedAuthorities);
+                }
+            });
+        }
+    }
+
+    private static void addRoles(
+            Object rolesObj,
+            Set<GrantedAuthority> mappedAuthorities
+    ) {
+        if (rolesObj instanceof Collection<?> roles) {
+            roles.stream()
+                    .map(Object::toString)
+                    .filter(role -> !role.isBlank())
+                    .map(SecurityConfig::roleAuthority)
+                    .map(SimpleGrantedAuthority::new)
+                    .forEach(mappedAuthorities::add);
+        }
+    }
+
+    private static String roleAuthority(String role) {
+        if (role.startsWith("ROLE_")) {
+            return role;
+        }
+
+        return "ROLE_" + role.toUpperCase(Locale.ROOT).replace('-', '_');
     }
 }
