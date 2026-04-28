@@ -30,7 +30,7 @@ spring:
               - email
         provider:
           keycloak:
-            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak:8080/realms/picture-dictionary}
+            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak/realms/picture-dictionary}
 
   cloud:
     gateway:
@@ -56,28 +56,28 @@ spring:
               uri: ${PROGRESS_SERVICE_URL:http://progress-manager}
               predicates:
                 - Path=/progress/**
-              uri: ${CONTENT_SERVICE_URL:http://content-manager:8080}
+              uri: ${CONTENT_SERVICE_URL:http://content-manager}
               predicates:
                 - Path=/topics
               filters:
                 - SaveSession
 
             - id: content-route-nested
-              uri: ${CONTENT_SERVICE_URL:http://content-manager:8080}
+              uri: ${CONTENT_SERVICE_URL:http://content-manager}
               predicates:
                 - Path=/topics/**
               filters:
                 - SaveSession
 
             - id: progress-route-root
-              uri: ${PROGRESS_SERVICE_URL:http://progress-manager:8080}
+              uri: ${PROGRESS_SERVICE_URL:http://progress-manager}
               predicates:
                 - Path=/progress
               filters:
                 - SaveSession
 
             - id: progress-route-nested
-              uri: ${PROGRESS_SERVICE_URL:http://progress-manager:8080}
+              uri: ${PROGRESS_SERVICE_URL:http://progress-manager}
               predicates:
                 - Path=/progress/**
               filters:
